@@ -213,10 +213,11 @@
       /*                           stack, */
       /*                           symbols, */
       /*                           (void *) CHICKEN_default_toplevel) == 1); */
-      /* void C_toplevel(C_word x, C_word y, C_word z); */
-      C_word chicken = CHICKEN_run(CHICKEN_default_toplevel);
-      /* C_word chicken = CHICKEN_run(C_toplevel); */
+      void C_toplevel(C_word x, C_word y, C_word z);
+      /* CHICKEN_run((void *) CHICKEN_default_toplevel); */
+      C_word chicken = CHICKEN_run((void *) C_toplevel);
       C_word result;
+      puts("oeutnhoeuthn");
       assert(CHICKEN_eval_string("(+ 2 3)", &result));
       assert(C_num_to_int(result) == 5);
       /* not initialized because of an inappropriate toplevel? */
@@ -225,18 +226,24 @@
       C_word lst, num = C_fix(2);
       lst = C_list(&ptr, 1, C_fix(2));
       request_rec r;
-      assert(handle(&r) == -1);
+      /* assert(handle(&r) == -1); */
+      printf("%d", handle(&r));
       return 0;
     }
     
   #+END_SRC
 
   #+BEGIN_SRC scheme :tangle test-chicken-prelude.scm
+    (use extras)
     (foreign-declare "#include <httpd.h>")
     (define-external
       (handle (c-pointer request_rec))
       int
-      (foreign-value "DECLINED" int))
+      (display 2)
+      (foreign-value "DECLINED" int)
+      (random 3))
+    (display 2)
+    (return-to-host)
     
   #+END_SRC
 

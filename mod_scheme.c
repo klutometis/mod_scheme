@@ -66,7 +66,9 @@ static int scheme_handler(request_rec *r)
 
 static void scheme_register_hooks(apr_pool_t *p)
 {
-  C_word chicken = CHICKEN_run(CHICKEN_default_toplevel);
+  void C_toplevel(C_word x, C_word y, C_word z);
+  /* C_word chicken = CHICKEN_run(CHICKEN_default_toplevel); */
+  C_word chicken = CHICKEN_run(C_toplevel);
   ap_hook_handler(scheme_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
