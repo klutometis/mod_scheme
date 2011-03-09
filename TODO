@@ -194,3 +194,207 @@
 
   i don't quite understand the callback stuff yet; but it has to do
   with output ports, apparently.
+
+  #+BEGIN_SRC c :tangle test-chicken.c
+    #include "httpd.h"
+    #include "http_config.h"
+    #include "http_protocol.h"
+    #include "ap_config.h"
+    #include <stdio.h>
+    #include <assert.h>
+    #include <chicken.h>
+    
+    extern int handle(request_rec *);
+    
+    int main (int argc, char **argv) {
+      /* long int heap, stack, symbols; */
+      /* CHICKEN_parse_command_line(argc, argv, &heap, &stack, &symbols); */
+      /* assert(CHICKEN_initialize(heap, */
+      /*                           stack, */
+      /*                           symbols, */
+      /*                           (void *) CHICKEN_default_toplevel) == 1); */
+      /* void C_toplevel(C_word x, C_word y, C_word z); */
+      C_word chicken = CHICKEN_run(CHICKEN_default_toplevel);
+      /* C_word chicken = CHICKEN_run(C_toplevel); */
+      C_word result;
+      assert(CHICKEN_eval_string("(+ 2 3)", &result));
+      assert(C_num_to_int(result) == 5);
+      /* not initialized because of an inappropriate toplevel? */
+      /* printf("%d", i); */
+      C_word *ptr = C_alloc(C_SIZEOF_LIST(1));
+      C_word lst, num = C_fix(2);
+      lst = C_list(&ptr, 1, C_fix(2));
+      request_rec r;
+      assert(handle(&r) == -1);
+      return 0;
+    }
+    
+  #+END_SRC
+
+  #+BEGIN_SRC scheme :tangle test-chicken-prelude.scm
+    (foreign-declare "#include <httpd.h>")
+    (define-external
+      (handle (c-pointer request_rec))
+      int
+      (foreign-value "DECLINED" int))
+    
+  #+END_SRC
+
+  #+BEGIN_SRC makefile
+    .PHONY: all
+    
+    all:
+        org-tangle TODO && \
+        csc -I/usr/local/apache2/include -e -k -v test-chicken-prelude.scm test-chicken.c && \
+        ./test-chicken-prelude
+  #+END_SRC
+
+  (now: how to do this from =mod_scheme.c=.)
+
+  hmm: =C_SCHEME_UNBOUND=, btw. also: =C_boundp=.
+
+  #+BEGIN_QUOTE
+  This returns true for both regular heterogenous R5RS vectors and
+  bytevectors ("blobs"). However, it does not return true for SRFI-4
+  vectors, as those are actually bytevectors wrapped in a structure
+  with a type tag.
+  #+END_QUOTE
+
+  hmm: structures with type-tags; do we have to resort to something
+  like this to create the =request_rec= in scheme? see =C_structurep=,
+  maybe; =C_taggedpointerp=.
+
+  cf. byteblocks:
+
+  #+BEGIN_QUOTE
+  Strings, flonums, bytevectors and lambda-info objects are considered
+  "byteblock" objects, as they are not containers for Scheme objects
+  but simply point to contiguous memory ranges of bytes.
+  #+END_QUOTE
+
+  there's something called a block-header:
+
+  #+BEGIN_SRC c
+    if (!C_immediatep(num) && C_block_header(num) == C_FLONUM_TAG) ...
+  #+END_SRC
+
+  there's also some sort of static string-buffer thing in =runtime.c=:
+
+  #+BEGIN_SRC c
+    static C_TLS C_char buffer[ STRING_BUFFER_SIZE ];
+  #+END_SRC
+
+  check this:
+
+  #+BEGIN_SRC c
+    void C_ccall C_number_to_string(C_word c, C_word closure, C_word k, C_word num, ...) {
+      // ...
+      radix = C_strlen(p);
+      a = C_alloc((C_bytestowords(radix) + 1));
+      radix = C_string(&a, radix, p);
+      C_kontinue(k, radix);
+    }
+  #+END_SRC
+
+  ends the signature with =...=; calls the continuation at the
+  end. meanwhile, there's much interaction with =buffer=. =p=, in
+  fact, is just a pointer into =buffer= which gets incremented.
+
+  it's also a =C_ccall=; therefore =C_alloc=?
+
+  #+BEGIN_QUOTE
+  Allocates memory from the C stack (C_alloc) and returns a pointer to
+  it. words should be the number of words needed for all data objects
+  that are to be created in this function. Note that stack-allocated
+  data objects have to be passed to Scheme callback functions, or they
+  will not be seen by the garbage collector. This is really only
+  usable for callback procedure invocations, make sure not to use it
+  in normal code, because the allocated memory will be re-used after
+  the foreign procedure returns.
+  #+END_QUOTE
+
+  interesting: =char* C_c_string (C_word string)=; to extract the
+  string from a =C_string=, apparently.
+
+  check this:
+
+  #+BEGIN_QUOTE
+  These macros and functions can be used to convert Scheme data
+  objects back to C data. Note that C_c_string() returns a pointer to
+  the character buffer of the actual Scheme object and is not
+  zero-terminated.
+  #+END_QUOTE
+
+  =C_block_item=:
+
+  #+BEGIN_QUOTE
+  This macro can be used to access slots of the non-immediate Scheme
+  data object x. index specifies the index of the slot to be fetched,
+  starting at 0. Pairs have 2 slots, one for the car and one for the
+  cdr. Vectors have one slot for each element.
+  #+END_QUOTE
+
+  #+BEGIN_QUOTE
+  You can set a variable's value with
+  =C_mutate(&C_symbol_value(SYMBOL), VALUE)=.
+  #+END_QUOTE
+
+  look at this snippet, even though it uses =C_alloc= without
+  callbacks; i think:
+
+  #+BEGIN_SRC c :tangle test-c-alloc.c
+    #include <stdio.h>
+    #include <chicken.h>
+    #include <mcheck.h>
+    
+    int main(void)
+    {
+      mtrace();
+      
+      C_word *mema, *memb, *memresult;
+      C_word a, b, result;
+    
+      mema = C_alloc(C_SIZEOF_FLONUM);
+      memb = C_alloc(C_SIZEOF_FLONUM);
+      memresult = C_alloc(C_SIZEOF_FLONUM);
+      a = C_flonum(&mema, 1.2);
+      b = C_flonum(&memb, 4.7);
+      result = C_a_i_flonum_plus(&memresult, 2, a, b);
+      printf("%lf\n", C_flonum_magnitude(result));
+      return 0;
+    }
+    
+  #+END_SRC
+
+  on threads:
+
+  #+BEGIN_QUOTE
+  When multiple threads are running concurrently, and control switches
+  from one thread to another, then the continuation of the current
+  thread is captured and saved. Any pending C stack frame still active
+  from a callback will remain on the stack until the threads is
+  re-activated again. This means that in a multithreading situation,
+  when C callbacks are involved, the available nursery space can be
+  smaller than expected. So doing many nested Scheme->C->Scheme calls
+  can reduce the available memory up to the point of thrashing. It is
+  advisable to have only a single thread with pending C stack-frames
+  at any given time.
+  #+END_QUOTE
+
+  regarding structures:
+
+  #+BEGIN_QUOTE
+  =C_i_structurep [C macro] C_word C_i_structurep(C_word x, C_word s)=
+
+  Is x a structure (record) object with type tag s? This is completely
+  safe to use, because it checks whether x is an immediate or not.
+  #+END_QUOTE
+
+  there's =##sys#make-structure=; =(##sys#make-structure 'u8vector
+  (alloc 'make-u8vector len ext?))=, etc. =C_vector_to_structure=; not
+  to mention =C_word C_structure(C_word **ptr, int n, ...)=, =C_word
+  C_h_structure(int n, ...)=, =C_word C_a_i_record(C_word **ptr, int
+  n, ...)=, =void C_ccall C_make_structure(C_word c, C_word closure,
+  C_word k, C_word type, ...)= (callback).
+
+  [[http://wiki.call-cc.org/man/4/Data%20representation][instructive]].

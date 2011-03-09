@@ -41,33 +41,40 @@
 #include "http_config.h"
 #include "http_protocol.h"
 #include "ap_config.h"
+#include <chicken.h>
+
+/* At some point, a suitable scheme record? Or maybe we can just
+   provide accessors and mutators. */
+extern int handle(request_rec *);
 
 /* The sample content handler */
 static int scheme_handler(request_rec *r)
 {
-    if (strcmp(r->handler, "scheme")) {
-        return DECLINED;
-    }
-    r->content_type = "text/html";      
+  handle(r);
 
-    if (!r->header_only)
-        ap_rputs("The sample page from mod_scheme.c\n", r);
-    return OK;
+  if (strcmp(r->handler, "scheme")) {
+    return DECLINED;
+  }
+  r->content_type = "text/html";      
+
+  if (!r->header_only)
+    ap_rputs("The sample page from mod_scheme.c\n", r);
+  return OK;
 }
 
 static void scheme_register_hooks(apr_pool_t *p)
 {
-    ap_hook_handler(scheme_handler, NULL, NULL, APR_HOOK_MIDDLE);
+  ap_hook_handler(scheme_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
 /* Dispatch list for API hooks */
 module AP_MODULE_DECLARE_DATA scheme_module = {
-    STANDARD20_MODULE_STUFF, 
-    NULL,                  /* create per-dir    config structures */
-    NULL,                  /* merge  per-dir    config structures */
-    NULL,                  /* create per-server config structures */
-    NULL,                  /* merge  per-server config structures */
-    NULL,                  /* table of config file commands       */
-    scheme_register_hooks  /* register hooks                      */
+  STANDARD20_MODULE_STUFF, 
+  NULL,                  /* create per-dir    config structures */
+  NULL,                  /* merge  per-dir    config structures */
+  NULL,                  /* create per-server config structures */
+  NULL,                  /* merge  per-server config structures */
+  NULL,                  /* table of config file commands       */
+  scheme_register_hooks  /* register hooks                      */
 };
 

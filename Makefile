@@ -14,18 +14,23 @@ APACHECTL=apachectl
 
 #   additional defines, includes and libraries
 #DEFS=-Dmy_define=my_value
-#INCLUDES=-Imy/include/dir
-#LIBS=-Lmy/lib/dir -lmylib
+#INCLUDES=prelude.o
+LIBS=-lchicken
+
+.SUFFIXES: .scm
+
+.scm.o:
+	csc -k -v -I$(includedir) -e -c $<
 
 #   the default target
-all: local-shared-build
+all: prelude.o local-shared-build
 
 #   install the shared object file into Apache 
 install: install-modules-yes
 
 #   cleanup
 clean:
-	-rm -f mod_scheme.o mod_scheme.lo mod_scheme.slo mod_scheme.la 
+	-rm -f mod_scheme.o mod_scheme.lo mod_scheme.slo mod_scheme.la prelude.o
 
 #   simple test
 test: reload
