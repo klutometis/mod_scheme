@@ -52,7 +52,7 @@ extern int handle(request_rec *);
 /* The sample content handler */
 static int scheme_handler(request_rec *r)
 {
-  ap_assert(handle(r) == DECLINED);
+  /* ap_assert(handle(r) == DECLINED); */
 
   if (strcmp(r->handler, "scheme")) {
     return DECLINED;

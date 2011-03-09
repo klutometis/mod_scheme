@@ -16,7 +16,6 @@ APACHECTL=apachectl
 #DEFS=-Dmy_define=my_value
 #INCLUDES=prelude.o
 LIBS=-lchicken
-shared=prelude.so
 
 .SUFFIXES: .scm
 
@@ -28,7 +27,7 @@ all: prelude.c local-shared-build
 
 #   install the shared object file into Apache 
 install: install-modules-yes
-	apxs -a -c -i -n scheme mod_scheme.c
+	apxs -a -c -i -n scheme prelude.c mod_scheme.c
 
 #   cleanup
 clean:
