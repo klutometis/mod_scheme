@@ -1,0 +1,196 @@
+* TODO handler function in scheme that receives a =request_rec=
+  . . . and returns a status code; see [[http://oss.digirati.com.br/mod_lua/2.0/handler.html][mod_lua]]. if memory serves,
+  that's basically what mod_python did.
+
+  check [[http://www.modpython.org/live/current/doc-html/pyapi-handler.html][this]] out:
+
+  #+BEGIN_QUOTE
+  A handler function will always be passed a reference to a request
+  object. Every handler can return [an HTTP error code]. Handlers can
+  send content to the client using the =req.write()= method. Client
+  data, such as POST requests, can be read by using the =req.read()=
+  function.
+  #+END_QUOTE
+
+  Boom: what else do you need? [[http://www.modpython.org/live/current/doc-html/pyapi-apmeth.html][some apache functions]] it exports;
+  [[http://www.modpython.org/live/current/doc-html/pyapi-mprequest-meth.html][methods]] and [[http://www.modpython.org/live/current/doc-html/pyapi-mprequest-mem.html][members]] on the =request_rec=.
+
+  [[http://www.modpython.org/live/current/doc-html/pyapi-cookie.html][cookies]], [[http://www.modpython.org/live/current/doc-html/pyapi-util.html][post parameters]], [[http://www.modpython.org/live/current/doc-html/pyapi-sess.html][sessions]]; [[http://www.modpython.org/live/current/doc-html/pyapi-psp.html][python server pages]] were pretty
+  cool, too. why not scheme server pages, etc.?
+
+  curious as to how it invoked the python interpreter; some mod_xs
+  have max_interpreters, etc. messy to have to worry about that, isn't
+  it?
+
+  main [[http://www.modpython.org/live/current/doc-html/dir-handlers-ph.html][request handler]].
+
+  we have to practice calling chicken from c, btw.
+
+  in =mod_python.c=, there are locks, etc.; and a notion of "current
+  interpreter." they're dealing with threads and mutexes. =apr_table=
+  is interesting, apparently, for persistent storage?
+
+  ah, maybe they're dealing with session locks?
+
+  =python_init= initializes some kind of =py_global_config= that
+  persists across restarts; reference to a
+  =apr_pool_userdata_{get,set}=; creates mutexes; something about a
+  call-back dictionary; interpreters is a dictionary of interpreters
+  (keyed by what? weird); registers optional functions about
+  interpreter acquisiton and release, also
+  {request,server,connection}-objects; [[http://apr.apache.org/docs/apr-util/0.9/group__APR__Util__Opt.html#gb611deabd6e78b5f666071e8cbdcc736][APR_REGISTER_OPTIONAL_FN]]
+  registers global functions for later retrieval; are tables used
+  mainly for config?; wow, there's an extended =determine_context=
+  procedure; cleanup handler; =python_get_request_object= stores the
+  object in the =req_config=: interesting; =select_interp_name= by
+  name: what does the name signify?; "base interpreter on directory
+  where the file is found" if =PythonInterpPerDirectory=; otherwise,
+  there's a =PythonInterpreter= which specifies one (this would be a
+  location on disk, and not the instantiated interpreter; i take it);
+  "default: per server": an interpreter per server?
+  (=con->base_server->server_hostname= or
+  =req->server->server_hostname=); =python_handler= gets/creates and
+  releases an interpreter, apparently, destroying the interpreter's
+  state but not the interpreter itself ("release the lock and destroy
+  tstate"): this simulates a new state every request; gets a
+  =resultobject= from =PyObject_CallMethod= on the dispatch function
+  with a request object (something about a callback, though):
+
+  #+BEGIN_SRC c
+    resultobject = PyObject_CallMethod(idata->obcallback, "HandlerDispatch",
+                                       "O", request_obj);
+  #+END_SRC
+
+  it eventually returns some sort of status such as =OK=, =DECLINED=,
+  etc.; there's even a =Py_XDECREF=; there's something called
+  =MAIN_INTERPRETER=; interesting:
+
+  #+BEGIN_SRC c
+    static int PythonHandler(request_rec *req) {
+      /*
+       * In Apache 2.0, all handlers receive a request and have
+       * a chance to process them.  Therefore, we need to only
+       * handle those that we explicitly agreed to handle (see 
+       * above).
+       */
+      if (!req->handler || (strcmp(req->handler, "mod_python") &&
+                            strcmp(req->handler, "python-program")))
+        return DECLINED;
+    
+      return python_handler(req, "PythonHandler");
+    }
+  #+END_SRC
+
+  jesus. should we compare =mod_lua= and =mod_scheme=?
+
+  yeah, =mod_scheme= has =max_interps= and =min_interps=; does it
+  round-robin? ah, indeed: =scheme_set_output_port_callback=; maybe
+  that's related to the =mod_python= callbacks? it then loads the file
+  pointed to by =file= with the interpreter, =interp=:
+
+  #+BEGIN_SRC c
+    scheme_load_file(interp,file);
+    {
+      pointer arg_cons = cons(interp,mk_pointer(interp,r),interp->NIL);
+      scheme_call_func(interp,"do_service",arg_cons);
+    }
+  #+END_SRC
+
+  it then releases =interp=, which it got from the pool:
+
+  #+BEGIN_SRC c
+    interp = scheme_get_interp(r->pool);
+  #+END_SRC
+
+  there's some magic for reading post-data (recall =mod_python's=
+  field stuff); whew: on the whole, though, more /prima facie/
+  readable than the mature =mod_python=.
+
+  bizarre: =internal.c= has some queue-based shit for getting and
+  releasing interpreters; oh, ok, nice: it is round-robin! wow,
+  there's some kind of big-ass scheme-initialization in
+  =scheme_code.h=.
+
+  yeah, in =scheme_post_config=, it add a bunch of interpreters into
+  the queue:
+
+  #+BEGIN_SRC c
+    for(i = 0;i < interp_count;i++) {
+      interp = apr_pcalloc(pconf,sizeof(scheme));
+      scheme_init(interp);
+      interp->gc_verbose = 0;
+      scheme_load_all_symbols(interp);
+      scheme_load_libs(interp,init_dir,plog);
+      queue_add(&interp_queue,interp);
+     }    
+  #+END_SRC
+
+  not sure how it refreshes them, though, once the run out; it appears
+  as though =queue_get= actually frees the head: hmm. oh, nice:
+  releasing the interpreter adds it back onto the queue:
+
+  #+BEGIN_SRC c
+    void scheme_release_interp(scheme *interp) {
+      queue_add(&interp_queue,interp);
+    }
+  #+END_SRC
+
+  if one runs out of interpreters, =scheme_get_interp= returns 0; and
+  a 500 status is returned:
+
+  #+BEGIN_SRC c
+    interp = scheme_get_interp(r->pool);
+    if (interp == 0) {
+      ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,"get_interp failed ");
+      return 500;
+     }
+  #+END_SRC
+
+  how easy would it be to implement something if we ignore the
+  interpreter queue for now?
+
+  org-babel for c has a =:flags= parameter, by the way, for passing to
+  gcc (i hope); it even adds shit like =#defines=, =#includes= and
+  =main=, if necessary (see also =:main= ("yes" or "no")).
+
+  #+BEGIN_SRC c :tangle hello.c
+    #include <stdio.h>
+    
+    int main() { printf("hello"); return 0; }    
+  #+END_SRC
+
+  couldn't get it to work, though; maybe we'll have to make-file it,
+  after all.
+
+  relationship between interpreters and pools? =interp_queue= is some
+  kind of global defined in =internal.h=; and the pool, interestingly
+  enough, is attached to =scheme= as =ext_data= (not vice
+  versa). (tables do look relevant for config, btw.)
+
+  look at this note from =scheme-private.h=:
+
+  #+BEGIN_SRC c
+    void *ext_data;     /* For the benefit of foreign functions */
+  #+END_SRC
+
+  it's used, for instance, in =scheme.c= for reading files.
+
+  =callback_data= is interesting, too: it's allocated in the pool
+  in the handler.
+
+  rubber meets the road here:
+
+  #+BEGIN_SRC c
+    scheme_load_file(interp,file);
+    {
+      pointer arg_cons = cons(interp,mk_pointer(interp,r),interp->NIL);
+      scheme_call_func(interp,"do_service",arg_cons);
+    }
+  #+END_SRC
+
+  =do_service= is the entry point; it's called with a pair containing
+  the interpreter and a pointer (?) to the =request_rec=: effectively
+  =(do_service req)=.
+
+  i don't quite understand the callback stuff yet; but it has to do
+  with output ports, apparently.
