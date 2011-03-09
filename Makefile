@@ -23,7 +23,7 @@ LIBS=-lchicken
 	csc -k -v -I$(includedir) -e -c $<
 
 #   the default target
-all: prelude.o local-shared-build
+all: local-shared-build
 
 #   install the shared object file into Apache 
 install: install-modules-yes
