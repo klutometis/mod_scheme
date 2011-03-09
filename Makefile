@@ -19,18 +19,18 @@ LIBS=-lchicken
 
 .SUFFIXES: .scm
 
-.scm.o:
-	csc -k -v -I$(includedir) -e -c $<
+.scm.c:
+	csc -v -I$(includedir) -e -k -c $<
 
 #   the default target
-all: local-shared-build
+all: prelude.c local-shared-build
 
 #   install the shared object file into Apache 
 install: install-modules-yes
 
 #   cleanup
 clean:
-	-rm -f mod_scheme.o mod_scheme.lo mod_scheme.slo mod_scheme.la prelude.o
+	rm -vf mod_scheme.o mod_scheme.lo mod_scheme.slo mod_scheme.la prelude.c prelude.o prelude.lo prelude.slo prelude.la
 
 #   simple test
 test: reload

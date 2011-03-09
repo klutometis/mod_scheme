@@ -37,11 +37,13 @@
 **    The sample page from mod_scheme.c
 */ 
 
+#include <stdlib.h>
 #include "httpd.h"
 #include "http_config.h"
 #include "http_protocol.h"
 #include "ap_config.h"
 #include <chicken.h>
+#include <http_log.h>
 
 /* At some point, a suitable scheme record? Or maybe we can just
    provide accessors and mutators. */
@@ -50,20 +52,20 @@ extern int handle(request_rec *);
 /* The sample content handler */
 static int scheme_handler(request_rec *r)
 {
-  handle(r);
-
+  ap_assert(handle(r) == DECLINED);
   if (strcmp(r->handler, "scheme")) {
     return DECLINED;
   }
   r->content_type = "text/html";      
 
   if (!r->header_only)
-    ap_rputs("The sample page from mod_scheme.c\n", r);
+    ap_rprintf(r, "The sample page from mod_scheme (%d).c\n", rand());
   return OK;
 }
 
 static void scheme_register_hooks(apr_pool_t *p)
 {
+  C_word chicken = CHICKEN_run(CHICKEN_default_toplevel);
   ap_hook_handler(scheme_handler, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
