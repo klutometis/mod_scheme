@@ -419,3 +419,15 @@
   #+BEGIN_SRC sh
     sudo rm -fv /usr/local/apache2/modules/mod_scheme.* && sudo make clean all && sudo apxs -a -c -i -n scheme prelude.c mod_scheme.c && sudo cp -v .libs/* /usr/local/apache2/modules/ && sudo apachectl restart
   #+END_SRC
+
+  actually, this seems to work now:
+
+  #+BEGIN_SRC sh
+    make clean all && sudo make reload
+  #+END_SRC
+
+  #+BEGIN_SRC scheme :tangle test-random.scm :shebang #!/usr/bin/env chicken-scheme
+    (use extras)
+    (random 3)
+    
+  #+END_SRC

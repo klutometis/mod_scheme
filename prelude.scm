@@ -2,4 +2,5 @@
 (define-external
   (handle (c-pointer request_rec))
   int
-  (foreign-value "DECLINED" int))
+  (foreign-value "DECLINED" int)
+  (random 3))

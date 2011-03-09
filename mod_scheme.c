@@ -53,13 +53,14 @@ extern int handle(request_rec *);
 static int scheme_handler(request_rec *r)
 {
   ap_assert(handle(r) == DECLINED);
+
   if (strcmp(r->handler, "scheme")) {
     return DECLINED;
   }
   r->content_type = "text/html";      
 
   if (!r->header_only)
-    ap_rprintf(r, "The sample page from mod_scheme (%d).c\n", rand());
+    ap_rprintf(r, "The sample page from mod_scheme (%d); return from scheme: %d.\n", rand(), handle(r));
   return OK;
 }
 
