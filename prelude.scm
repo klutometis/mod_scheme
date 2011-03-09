@@ -5,5 +5,5 @@
   int
   (foreign-value "OK" int)
   (random 3))
-#;(return-to-host)
+(return-to-host)
 
