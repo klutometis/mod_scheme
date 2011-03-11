@@ -1,4 +1,6 @@
 # -*- org -*-
+* TODO ouch: an error in the script brings down the whole server;
+  wrap it in a condition-case and return =HTTP_INTERNAL_SERVER_ERROR=.
 * TODO apache segfaults, for some reason, on =(use environments)=;
   so we've resorted to =(include "srclib/...")=.
 * TODO opening a file
