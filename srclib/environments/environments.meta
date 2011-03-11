@@ -1,0 +1,12 @@
+;;; environments.meta -*- Hen -*-
+
+((egg "environments.egg")
+ (synopsis "User defined evaluation environments")
+ (category lang-exts)
+ (license "BSD")
+ (author "felix")
+ (doc-from-wiki)
+ (files
+  "environments.scm" 
+  "environments.setup"
+  "environments.html"))

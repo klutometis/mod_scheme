@@ -38,34 +38,66 @@
 */ 
 
 #include <stdlib.h>
-#include "httpd.h"
-#include "http_config.h"
-#include "http_protocol.h"
-#include "ap_config.h"
-#include <chicken.h>
+
+#include <httpd.h>
+#include <http_config.h>
 #include <http_log.h>
+#include <http_protocol.h>
+#include <ap_config.h>
+#include <apr_file_info.h>
+#include <apr_file_io.h>
+
+#include <chicken.h>
 
 /* At some point, a suitable scheme record? Or maybe we can just
    provide accessors and mutators. */
 extern int handle(request_rec *);
 
 /* The sample content handler */
-static int scheme_handler(request_rec *r)
-{
-  /* ap_assert(handle(r) == DECLINED); */
-
+static int scheme_handler(request_rec *r) {
   if (strcmp(r->handler, "scheme")) {
     return DECLINED;
   }
+
+  if (!(r->finfo.filetype == APR_REG ||
+        r->finfo.filetype == APR_LNK)) {
+    ap_log_rerror(APLOG_MARK,
+                  APLOG_DEBUG,
+                  OK,
+                  r,
+                  "Declining to open non-file %s",
+                  r->filename);
+    return DECLINED;
+  }
+
+  apr_file_t *file;
+
+  if (apr_file_open(&file,
+                    r->filename,
+                    APR_READ | APR_XTHREAD,
+                    APR_OS_DEFAULT,
+                    r->pool)) {
+    ap_log_rerror(APLOG_MARK,
+                  APLOG_DEBUG,
+                  OK,
+                  r,
+                  "Could not open %s",
+                  r->filename);
+    return HTTP_NOT_FOUND;
+  }
+
+  /* apr_file_close(file); */
+
   r->content_type = "text/html";      
 
   if (!r->header_only)
-    ap_rprintf(r, "The sample page from mod_scheme (%d); return from scheme: %d.\n", rand(), handle(r));
+    ap_rprintf(r, "The sample page from mod_scheme (%d); return from scheme: %d.\n",
+               rand(),
+               mod_scheme_handle(r->filename, r));
   return OK;
 }
 
-static void scheme_register_hooks(apr_pool_t *p)
-{
+static void scheme_register_hooks(apr_pool_t *p) {
   void C_toplevel(C_word x, C_word y, C_word z);
   /* C_word chicken = CHICKEN_run(CHICKEN_default_toplevel); */
   C_word chicken = CHICKEN_run(C_toplevel);

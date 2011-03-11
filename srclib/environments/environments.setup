@@ -1,0 +1,23 @@
+;;;; -*- Scheme -*-
+
+(compile
+  -fixnum-arithmetic
+  -disable-interrupts   ;we manipulate system structures
+  -no-procedure-checks  ;we do explicit checks
+  -no-bound-checks      ;we manipulate unbound variables
+  -O2 -d1
+  -s environments.scm -j environments)
+(compile
+  -fixnum-arithmetic
+  -disable-interrupts   ;we manipulate system structures
+  -no-procedure-checks  ;we do explicit checks
+  -no-bound-checks      ;we manipulate unbound variables
+  -O2 -d1
+  -unit environments
+  -c environments.scm -j environments)
+(compile -O3 -d0 -s environments.import.scm)
+
+(install-extension 'environments
+  `("environments.so" "environments.import.so" "environments.o")
+  `((version "1.6.1")
+    (static "environments.o")))

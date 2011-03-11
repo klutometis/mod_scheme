@@ -1,3 +1,40 @@
+# -*- org -*-
+* TODO apache segfaults, for some reason, on =(use environments)=;
+  so we've resorted to =(include "srclib/...")=.
+* TODO opening a file
+  wait a minute: the [[http://freshmeat.net/projects/mod_scheme/][other mod_scheme]] reads the file every request?
+  why not set up a chicken interpreter per file, read the file once,
+  and dispatch continuously?
+
+  still need to figure out how to start multiple runtimes, though;
+  it's too bad none of the runtime procs support an environment; they
+  do support this notion of toplevel, though, which is
+  interesting. might have to initialize a new toplevel for every file?
+
+  what about [[http://wiki.call-cc.org/eggref/4/sandbox][sandbox]]? somewhat castrated, though threadsafe.
+
+  for now, let's just open it every request; caching it across
+  requests is an optimization.
+* TODO threads?
+  i'm not sure we can use threads to handle dispatch asynchronously:
+  since we'll have returned OK, possibly, before the thread is
+  finished; cutting off the output pipe, i'd imagine. or am i wrong?
+
+  on the other hand, i don't seem to be able to launch multiple
+  toplevels without a segfault.
+
+  can we have it wait on the thread, on the other hand, using
+  CHICKEN_continue? that would be interesting; what happens when you
+  call =(return-to-host)= from within a thread?
+
+  can we communicate with mutices?
+* TODO =CHICKEN_load= can handle compiled source;
+  which means we can compile our web programs, too (just like
+  fastcgi).
+* TODO don't forget about namespace issues, btw;
+  prefix with e.g. =mod_scheme_=.
+* TODO hook up =(current-output-port)= to the browser
+  =(current-error-port)= to =error_log=; that would be sweet.
 * TODO handler function in scheme that receives a =request_rec=
   . . . and returns a status code; see [[http://oss.digirati.com.br/mod_lua/2.0/handler.html][mod_lua]]. if memory serves,
   that's basically what mod_python did.
@@ -215,10 +252,14 @@
       /*                           (void *) CHICKEN_default_toplevel) == 1); */
       void C_toplevel(C_word x, C_word y, C_word z);
       /* CHICKEN_run((void *) CHICKEN_default_toplevel); */
-      C_word chicken = CHICKEN_run((void *) C_toplevel);
+      /* C_word continuation = CHICKEN_run((void *) C_toplevel); */
+      C_word continuation = CHICKEN_run((void *) C_toplevel);
       C_word result;
       puts("oeutnhoeuthn");
-      assert(CHICKEN_eval_string("(+ 2 3)", &result));
+      assert(CHICKEN_eval_string("(define x 2)", &result));
+      assert(CHICKEN_eval_string("(define y 3)", &result));
+      assert(CHICKEN_eval_string("(+ x y)", &result));
+      /* CHICKEN_run((void *) C_toplevel); */
       assert(C_num_to_int(result) == 5);
       /* not initialized because of an inappropriate toplevel? */
       /* printf("%d", i); */
@@ -247,13 +288,16 @@
     
   #+END_SRC
 
-  #+BEGIN_SRC makefile
+  usage: =./test-chicken.mk | make -f -=
+
+  #+BEGIN_SRC makefile :tangle test-chicken.mk :shebang #!/usr/bin/unexpand -t 4
     .PHONY: all
     
     all:
         org-tangle TODO && \
         csc -I/usr/local/apache2/include -e -k -v test-chicken-prelude.scm test-chicken.c && \
         ./test-chicken-prelude
+    
   #+END_SRC
 
   (now: how to do this from =mod_scheme.c=.)
