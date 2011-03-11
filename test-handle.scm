@@ -1,7 +1,8 @@
-;; (import scheme chicken)
-(require-library environments)
-(import environments)
+(require-library syslog)
+(import syslog)
 
 (define (handle! request)
-  (make-environment ounth)
-  (request-header-only request))
+  ;; (syslog prio/warning "~a" (make-request-output-port 2))
+  (display "Hello, Apache!")
+  (display "Hello, Apache logs!" (current-error-port))
+  ok)

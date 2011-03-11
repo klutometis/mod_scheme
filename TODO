@@ -1,4 +1,6 @@
 # -*- org -*-
+* TODO apparently the handler-environment is fucked up;
+  can't import =ports=, etc.
 * DONE ouch: an error in the script brings down the whole server;
   CLOSED: [2011-03-11 Fri 05:26]
   - CLOSING NOTE [2011-03-11 Fri 05:27] \\
@@ -39,7 +41,10 @@
   fastcgi).
 * TODO don't forget about namespace issues, btw;
   prefix with e.g. =mod_scheme_=.
-* TODO hook up =(current-output-port)= to the browser
+* DONE hook up =(current-output-port)= to the browser
+  CLOSED: [2011-03-11 Fri 06:02]
+  - CLOSING NOTE [2011-03-11 Fri 06:02] \\
+    fucking got it!
   =(current-error-port)= to =error_log=; that would be sweet.
 * TODO handler function in scheme that receives a =request_rec=
   . . . and returns a status code; see [[http://oss.digirati.com.br/mod_lua/2.0/handler.html][mod_lua]]. if memory serves,

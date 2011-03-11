@@ -90,11 +90,11 @@ static int scheme_handler(request_rec *r) {
 
   r->content_type = "text/html";      
 
-  if (!r->header_only)
-    ap_rprintf(r, "The sample page from mod_scheme (%d); return from scheme: %d.\n",
-               rand(),
-               mod_scheme_handle(r->filename, r));
-  return OK;
+  /* if (!r->header_only) */
+  /*   ap_rprintf(r, "The sample page from mod_scheme (%d); return from scheme: %d.\n", */
+  /*              rand(), */
+  /*              mod_scheme_handle(r->filename, r)); */
+  return mod_scheme_handle(r->filename, r);
 }
 
 static void scheme_register_hooks(apr_pool_t *p) {

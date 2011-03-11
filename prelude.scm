@@ -1,4 +1,5 @@
 (include "srclib/environments/environments.scm")
+(require-library srfi-13)
 (import extras ports srfi-13 environments defstruct foreigners)
 (foreign-declare "#include <httpd.h>")
 (foreign-declare "#include <http_log.h>")
@@ -32,13 +33,26 @@
   #;((c-pointer "apr_pool_t") request-pool)
   (int header_only request-rec-header-only))
 
-(define (puts string request-rec*)
+(define (rputs string request-rec*)
   ((foreign-lambda int
                    "ap_rputs"
                    c-string
                    (c-pointer "request_rec"))
    string
    request-rec*))
+
+(define (rflush request-rec*)
+  ((foreign-lambda int
+                   "ap_rflush"
+                   (c-pointer "request_rec"))
+   request-rec*))
+
+(define (make-request-output-port request-rec*)
+  (make-output-port
+   (lambda (scribendum)
+     (rputs scribendum request-rec*))
+   void
+   (lambda () (rflush request-rec*))))
 
 (define (log-error request-rec* string)
   ((foreign-lambda void
@@ -57,18 +71,17 @@
    request-rec*
    string))
 
+(define (make-request-error-port request-rec*)
+  (make-output-port
+   (lambda (scribendum)
+     (log-error request-rec* scribendum))
+   void
+   void))
+
 (define ok
   (foreign-value "OK" int))
 (define internal-server-error
   (foreign-value "HTTP_INTERNAL_SERVER_ERROR" int))
-
-(define (make-request-output-port request-rec*)
-  (let ((buffer ""))
-    (make-output-port
-     (lambda (scribendum)
-       (set! buffer (string-append/shared buffer scribendum)))
-     (lambda () (set! buffer ""))
-     (lambda () (rputs buffer request-rec*)))))
 
 (define-external
   (mod_scheme_handle (c-string file) (c-pointer request-rec*))
@@ -81,29 +94,31 @@
      (begin
        (load file (lambda (expression)
                     (eval expression environment)))
-       (eval
-        `(begin
-           (require-library chicken srfi-12)
-           (import chicken)
-           (condition-case
-            (handle! (make-request ,(request-rec-header-only request-rec*)))
-            (exn (exn)
-                 (let ((message
-                        ((condition-property-accessor 'exn 'message)
-                         exn))
-                       (arguments
-                        ((condition-property-accessor 'exn 'arguments)
-                         exn))
-                       (location
-                        ((condition-property-accessor 'exn 'location)
-                         exn)))
-                   (log-error request-rec*
-                              (format "Message: ~A; Arguments: ~A; Location: ~A"
-                                      message
-                                      arguments
-                                      location))
-                   internal-server-error))))
-        environment))
+       (condition-case
+        (with-output-to-port
+            (make-request-output-port request-rec*)
+          (lambda ()
+            (with-error-output-to-port
+             (make-request-error-port request-rec*)
+             (lambda ()
+               (eval `(handle! (make-request ,(request-rec-header-only request-rec*)))
+                     environment)))))
+        (exn (exn)
+             (let ((message
+                    ((condition-property-accessor 'exn 'message)
+                     exn))
+                   (arguments
+                    ((condition-property-accessor 'exn 'arguments)
+                     exn))
+                   (location
+                    ((condition-property-accessor 'exn 'location)
+                     exn)))
+               (log-error request-rec*
+                          (format "Message: ~A; Arguments: ~A; Location: ~A"
+                                  message
+                                  arguments
+                                  location))
+               internal-server-error))))
      (exn (exn)
           (let ((message
                  ((condition-property-accessor 'exn 'message)
