@@ -101,10 +101,10 @@
                 (location
                  ((condition-property-accessor 'exn 'location) exn)))
             (log-error request-rec*
-                       (format "Message: ~A; arguments: ~A; location: ~A"
-                               message
-                               arguments
-                               location))
+                       "Message: ~A; arguments: ~A; location: ~A"
+                       message
+                       arguments
+                       location)
             internal-server-error))))))
 
 (define invoke-handler
