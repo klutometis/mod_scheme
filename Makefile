@@ -27,7 +27,7 @@ all: prelude.c local-shared-build
 
 #   install the shared object file into Apache 
 install: install-modules-yes
-	apxs -c -i -n scheme prelude.c mod_scheme.c
+	apxs -a -c -i -n scheme prelude.c mod_scheme.c
 
 #   cleanup
 clean:

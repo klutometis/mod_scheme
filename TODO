@@ -1,18 +1,27 @@
 # -*- org -*-
-* DONE abstract out the 500-handlers in =prelude.scm=.
-  CLOSED: [2011-03-11 Fri 07:41]
+* TODO =README=
+* TODO dispatch optizimations à la [[http://www.modrails.com/documentation/Architectural%20overview.html][mod_passenger]]
+  (thanks, DerGuteMoritz!); not totally dissimilar to [[http://modtex.org/][mod_tex]], but we
+  never got around to multiplying handlers. trader joe is our "spawn
+  server".
 * TODO more meaningful file, line and location in error messages
 * TODO apparently the handler-environment is fucked up;
   can't import =ports=, etc.
+* TODO apache segfaults, for some reason, on =(use environments)=;
+  so we've resorted to =(include "srclib/...")=.
+* TODO =CHICKEN_load= can handle compiled source;
+  which means we can compile our web programs, too (just like
+  fastcgi); must test this.
+* DONE abstract out the 500-handlers in =prelude.scm=.
+  CLOSED: [2011-03-11 Fri 07:41]
 * DONE ouch: an error in the script brings down the whole server;
   CLOSED: [2011-03-11 Fri 05:26]
   - CLOSING NOTE [2011-03-11 Fri 05:27] \\
     rudimentarily; would be nice to wrap =handle!= in a =condition-case=,
     so that we could get actual location-data.
   wrap it in a condition-case and return =HTTP_INTERNAL_SERVER_ERROR=.
-* TODO apache segfaults, for some reason, on =(use environments)=;
-  so we've resorted to =(include "srclib/...")=.
-* TODO opening a file
+* DONE opening a file
+  CLOSED: [2011-03-11 Fri 07:46]
   wait a minute: the [[http://freshmeat.net/projects/mod_scheme/][other mod_scheme]] reads the file every request?
   why not set up a chicken interpreter per file, read the file once,
   and dispatch continuously?
@@ -26,7 +35,47 @@
 
   for now, let's just open it every request; caching it across
   requests is an optimization.
-* TODO threads?
+* DONE hook up =(current-output-port)= to the browser
+  CLOSED: [2011-03-11 Fri 06:02]
+  - CLOSING NOTE [2011-03-11 Fri 06:02] \\
+    fucking got it!
+  =(current-error-port)= to =error_log=; that would be sweet.
+* DONE compilation referencing chicken
+  CLOSED: [2011-03-11 Fri 07:42]
+  [[http://docstore.mik.ua/orelly/apache_mod/171.htm#BIN370][this]] works, interestingly:
+
+  #+BEGIN_SRC sh
+    make clean all && sudo apxs -c -i -n scheme prelude.c mod_scheme.c && sudo apachectl graceful
+  #+END_SRC
+
+  #+BEGIN_QUOTE
+  LoadFile /usr/local/lib/libchicken.so.5
+  LoadFile modules/prelude.so
+  LoadModule scheme_module modules/mod_scheme.so
+  #+END_QUOTE
+
+  shit load of segmentation faults, though. (whoops: wasn't
+  initializing chicken!)
+
+  i now seem to need this monstrosity; why?
+
+  #+BEGIN_SRC sh
+    sudo rm -fv /usr/local/apache2/modules/mod_scheme.* && sudo make clean all && sudo apxs -a -c -i -n scheme prelude.c mod_scheme.c && sudo cp -v .libs/* /usr/local/apache2/modules/ && sudo apachectl restart
+  #+END_SRC
+
+  actually, this seems to work now:
+
+  #+BEGIN_SRC sh
+    make clean all && sudo make reload
+  #+END_SRC
+
+  #+BEGIN_SRC scheme :tangle test-random.scm :shebang #!/usr/bin/env chicken-scheme
+    (use extras)
+    (random 3)
+    
+  #+END_SRC
+* CANCELED threads?
+  CLOSED: [2011-03-11 Fri 07:50]
   i'm not sure we can use threads to handle dispatch asynchronously:
   since we'll have returned OK, possibly, before the thread is
   finished; cutting off the output pipe, i'd imagine. or am i wrong?
@@ -39,17 +88,11 @@
   call =(return-to-host)= from within a thread?
 
   can we communicate with mutices?
-* TODO =CHICKEN_load= can handle compiled source;
-  which means we can compile our web programs, too (just like
-  fastcgi).
-* TODO don't forget about namespace issues, btw;
+* CANCELED don't forget about namespace issues, btw;
+  CLOSED: [2011-03-11 Fri 07:42]
   prefix with e.g. =mod_scheme_=.
-* DONE hook up =(current-output-port)= to the browser
-  CLOSED: [2011-03-11 Fri 06:02]
-  - CLOSING NOTE [2011-03-11 Fri 06:02] \\
-    fucking got it!
-  =(current-error-port)= to =error_log=; that would be sweet.
-* TODO handler function in scheme that receives a =request_rec=
+* CANCELED handler function in scheme that receives a =request_rec=
+  CLOSED: [2011-03-11 Fri 07:42]
   . . . and returns a status code; see [[http://oss.digirati.com.br/mod_lua/2.0/handler.html][mod_lua]]. if memory serves,
   that's basically what mod_python did.
 
@@ -463,36 +506,3 @@
   C_word k, C_word type, ...)= (callback).
 
   [[http://wiki.call-cc.org/man/4/Data%20representation][instructive]].
-* TODO compilation referencing chicken
-  [[http://docstore.mik.ua/orelly/apache_mod/171.htm#BIN370][this]] works, interestingly:
-
-  #+BEGIN_SRC sh
-    make clean all && sudo apxs -c -i -n scheme prelude.c mod_scheme.c && sudo apachectl graceful
-  #+END_SRC
-
-  #+BEGIN_QUOTE
-  LoadFile /usr/local/lib/libchicken.so.5
-  LoadFile modules/prelude.so
-  LoadModule scheme_module modules/mod_scheme.so
-  #+END_QUOTE
-
-  shit load of segmentation faults, though. (whoops: wasn't
-  initializing chicken!)
-
-  i now seem to need this monstrosity; why?
-
-  #+BEGIN_SRC sh
-    sudo rm -fv /usr/local/apache2/modules/mod_scheme.* && sudo make clean all && sudo apxs -a -c -i -n scheme prelude.c mod_scheme.c && sudo cp -v .libs/* /usr/local/apache2/modules/ && sudo apachectl restart
-  #+END_SRC
-
-  actually, this seems to work now:
-
-  #+BEGIN_SRC sh
-    make clean all && sudo make reload
-  #+END_SRC
-
-  #+BEGIN_SRC scheme :tangle test-random.scm :shebang #!/usr/bin/env chicken-scheme
-    (use extras)
-    (random 3)
-    
-  #+END_SRC
