@@ -1,9 +1,18 @@
 (include "srclib/environments/environments.scm")
 (require-library srfi-13)
 (import extras ports srfi-13 environments defstruct foreigners)
+
 (foreign-declare "#include <httpd.h>")
 (foreign-declare "#include <http_log.h>")
-;;; test this against just sending it all along.
+
+(define ok
+  (foreign-value "OK" int))
+(define internal-server-error
+  (foreign-value "HTTP_INTERNAL_SERVER_ERROR" int))
+(define log-debug
+  (foreign-value "LOG_DEBUG" int))
+
+(define log-level (make-parameter log-debug))
 
 (defstruct
   request
@@ -30,7 +39,6 @@
 
 (define-foreign-record-type
   (request_rec request_rec)
-  #;((c-pointer "apr_pool_t") request-pool)
   (int header_only request-rec-header-only))
 
 (define (rputs string request-rec*)
@@ -54,7 +62,7 @@
    void
    (lambda () (rflush request-rec*))))
 
-(define (log-error request-rec* string)
+(define (log-error request-rec* format-string . args)
   ((foreign-lambda void
                    "ap_log_rerror"
                    c-string
@@ -63,13 +71,13 @@
                    int
                    (c-pointer "request_rec")
                    c-string)
-   ;; something more instructive, perhaps?
+   ;; something more informative, perhaps?
    (foreign-value "__FILE__" c-string)
    (foreign-value "__LINE__" int)
-   (foreign-value "LOG_DEBUG" int)
+   (log-level)
    (foreign-value "OK" int)
    request-rec*
-   string))
+   (apply format (cons format-string args))))
 
 (define (make-request-error-port request-rec*)
   (make-output-port
@@ -77,11 +85,6 @@
      (log-error request-rec* scribendum))
    void
    void))
-
-(define ok
-  (foreign-value "OK" int))
-(define internal-server-error
-  (foreign-value "HTTP_INTERNAL_SERVER_ERROR" int))
 
 (define-external
   (mod_scheme_handle (c-string file) (c-pointer request-rec*))

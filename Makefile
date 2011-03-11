@@ -46,7 +46,7 @@ reload: install restart
 start:
 	$(APACHECTL) start
 restart:
-	$(APACHECTL) restart
+	$(APACHECTL) stop && sleep 5 && $(APACHECTL) start
 stop:
 	$(APACHECTL) stop
 
