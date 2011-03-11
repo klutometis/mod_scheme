@@ -1,5 +1,5 @@
 # -*- org -*-
-* TODO more meaningful file and line in error messages
+* TODO more meaningful file, line and location in error messages
 * TODO apparently the handler-environment is fucked up;
   can't import =ports=, etc.
 * DONE ouch: an error in the script brings down the whole server;
