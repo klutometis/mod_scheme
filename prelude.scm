@@ -16,6 +16,8 @@
   (foreign-value "LOG_DEBUG" int))
 
 (define log-level (make-parameter log-debug))
+;;; TODO: We're not actually using this parameter (can't seem to get
+;;; it to play well with `eval').
 (define handler-function (make-parameter 'handle!))
 
 (defstruct
