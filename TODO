@@ -1,5 +1,9 @@
 # -*- org -*-
-* TODO ouch: an error in the script brings down the whole server;
+* DONE ouch: an error in the script brings down the whole server;
+  CLOSED: [2011-03-11 Fri 05:26]
+  - CLOSING NOTE [2011-03-11 Fri 05:27] \\
+    rudimentarily; would be nice to wrap =handle!= in a =condition-case=,
+    so that we could get actual location-data.
   wrap it in a condition-case and return =HTTP_INTERNAL_SERVER_ERROR=.
 * TODO apache segfaults, for some reason, on =(use environments)=;
   so we've resorted to =(include "srclib/...")=.

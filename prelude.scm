@@ -57,6 +57,11 @@
    request-rec*
    string))
 
+(define ok
+  (foreign-value "OK" int))
+(define internal-server-error
+  (foreign-value "HTTP_INTERNAL_SERVER_ERROR" int))
+
 (define (make-request-output-port request-rec*)
   (let ((buffer ""))
     (make-output-port
@@ -76,25 +81,29 @@
      (begin
        (load file (lambda (expression)
                     (eval expression environment)))
-       (condition-case
-        (eval `(handle! (make-request ,(request-rec-header-only request-rec*)))
-              environment)
-        (exn (exn)
-             (let ((message
-                    ((condition-property-accessor 'exn 'message)
-                     exn))
-                   (arguments
-                    ((condition-property-accessor 'exn 'arguments)
-                     exn))
-                   (location
-                    ((condition-property-accessor 'exn 'location)
-                     exn)))
-               (log-error request-rec*
-                          (format "Message: ~A; Arguments: ~A; Location: ~A"
-                                  message
-                                  arguments
-                                  location))
-               (foreign-value "HTTP_INTERNAL_SERVER_ERROR" int)))))
+       (eval
+        `(begin
+           (require-library chicken srfi-12)
+           (import chicken)
+           (condition-case
+            (handle! (make-request ,(request-rec-header-only request-rec*)))
+            (exn (exn)
+                 (let ((message
+                        ((condition-property-accessor 'exn 'message)
+                         exn))
+                       (arguments
+                        ((condition-property-accessor 'exn 'arguments)
+                         exn))
+                       (location
+                        ((condition-property-accessor 'exn 'location)
+                         exn)))
+                   (log-error request-rec*
+                              (format "Message: ~A; Arguments: ~A; Location: ~A"
+                                      message
+                                      arguments
+                                      location))
+                   internal-server-error))))
+        environment))
      (exn (exn)
           (let ((message
                  ((condition-property-accessor 'exn 'message)
