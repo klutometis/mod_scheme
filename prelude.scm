@@ -135,10 +135,7 @@
 (define-external
   (mod_scheme_handle (c-string file) (c-pointer request-rec*))
   int
-  (let ((environment
-         (environment-copy #;(scheme-report-environment 5)
-          (interaction-environment)
-          #t)))
+  (let ((environment (environment-copy (interaction-environment) #t)))
     (eval-file request-rec* environment file)))
 
 (return-to-host)
