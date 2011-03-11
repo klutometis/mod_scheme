@@ -1,6 +1,7 @@
 (include "srclib/environments/environments.scm")
 (require-library srfi-13)
 (import extras ports srfi-13 environments defstruct foreigners)
+(import-for-syntax matchable)
 
 (foreign-declare "#include <httpd.h>")
 (foreign-declare "#include <http_log.h>")
@@ -13,6 +14,7 @@
   (foreign-value "LOG_DEBUG" int))
 
 (define log-level (make-parameter log-debug))
+(define handler-function (make-parameter 'handle!))
 
 (defstruct
   request
@@ -86,6 +88,50 @@
    void
    void))
 
+(define-syntax server-error-on-condition
+  (lambda (expression rename compare)
+    (match-let (((_ request-rec* . forms) expression))
+      `(condition-case
+        (begin ,@forms)
+        (exn (exn)
+          (let ((message
+                 ((condition-property-accessor 'exn 'message) exn))
+                (arguments
+                 ((condition-property-accessor 'exn 'arguments) exn))
+                (location
+                 ((condition-property-accessor 'exn 'location) exn)))
+            (log-error request-rec*
+                       (format "Message: ~A; arguments: ~A; location: ~A"
+                               message
+                               arguments
+                               location))
+            internal-server-error))))))
+
+(define invoke-handler
+  (case-lambda
+   ((request-rec* environment)
+    (invoke-handler request-rec* environment (handler-function)))
+   ((request-rec* environment handler-function)
+    (server-error-on-condition
+     request-rec*
+     (with-output-to-port
+         (make-request-output-port request-rec*)
+       (lambda ()
+         (with-error-output-to-port
+          (make-request-error-port request-rec*)
+          (lambda ()
+            (eval `(handle!
+                    (make-request
+                     ,(request-rec-header-only request-rec*)))
+                  environment)))))))))
+
+(define (eval-file request-rec* environment file)
+  (server-error-on-condition
+   request-rec*
+   (load file (lambda (expression)
+                (eval expression environment)))
+   (invoke-handler request-rec* environment)))
+
 (define-external
   (mod_scheme_handle (c-string file) (c-pointer request-rec*))
   int
@@ -93,50 +139,6 @@
          (environment-copy #;(scheme-report-environment 5)
           (interaction-environment)
           #t)))
-    (condition-case
-     (begin
-       (load file (lambda (expression)
-                    (eval expression environment)))
-       (condition-case
-        (with-output-to-port
-            (make-request-output-port request-rec*)
-          (lambda ()
-            (with-error-output-to-port
-             (make-request-error-port request-rec*)
-             (lambda ()
-               (eval `(handle! (make-request ,(request-rec-header-only request-rec*)))
-                     environment)))))
-        (exn (exn)
-             (let ((message
-                    ((condition-property-accessor 'exn 'message)
-                     exn))
-                   (arguments
-                    ((condition-property-accessor 'exn 'arguments)
-                     exn))
-                   (location
-                    ((condition-property-accessor 'exn 'location)
-                     exn)))
-               (log-error request-rec*
-                          (format "Message: ~A; Arguments: ~A; Location: ~A"
-                                  message
-                                  arguments
-                                  location))
-               internal-server-error))))
-     (exn (exn)
-          (let ((message
-                 ((condition-property-accessor 'exn 'message)
-                  exn))
-                (arguments
-                 ((condition-property-accessor 'exn 'arguments)
-                  exn))
-                (location
-                 ((condition-property-accessor 'exn 'location)
-                  exn)))
-            (log-error request-rec*
-                       (format "Message: ~A; Arguments: ~A; Location: ~A"
-                               message
-                               arguments
-                               location))
-            (foreign-value "HTTP_INTERNAL_SERVER_ERROR" int))))))
+    (eval-file request-rec* environment file)))
 
 (return-to-host)
