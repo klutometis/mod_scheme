@@ -1,3 +1,5 @@
+;;; TODO: Apache segfaults if we try to (use environments); compiling
+;;; from source instead.
 (include "srclib/environments/environments.scm")
 (require-library srfi-13)
 (import extras ports srfi-13 environments defstruct foreigners)
