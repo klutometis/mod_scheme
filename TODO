@@ -1,4 +1,7 @@
 # -*- org -*-
+* TODO abstract some common things into a module
+  such as the request struct and constants like =ok=,
+  =internal-server-error=, etc.
 * TODO =README=
 * TODO dispatch optizimations à la [[http://www.modrails.com/documentation/Architectural%20overview.html][mod_passenger]]
   (thanks, DerGuteMoritz!); not totally dissimilar to [[http://modtex.org/][mod_tex]], but we
